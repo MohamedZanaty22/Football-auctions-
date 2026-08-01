@@ -6,10 +6,11 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
+from kivy.uix.spinner import Spinner
 from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
 
-# Set background color to dark theme
+# Dark theme background
 Window.clearcolor = (0.07, 0.07, 0.09, 1)
 
 # ==========================================
@@ -93,42 +94,46 @@ def init_db():
 class FootballAuctionLeagueApp(App):
     def build(self):
         init_db()
+        self.num_players = 4  # الافتراضي 4
         self.root = BoxLayout(orientation='vertical', padding=15, spacing=10)
         self.show_name_setup_screen()
         return self.root
 
     # ------------------------------------------
-    # SCREEN 1: Setup Player Names (Modern UI)
+    # SCREEN 1: Setup Dynamic Player Count & Names
     # ------------------------------------------
     def show_name_setup_screen(self):
         self.root.clear_widgets()
         
         title = Label(
             text="⚽ FOOTBALL DRAFT MANAGER ⚽", 
-            font_size='22sp', 
+            font_size='20sp', 
             bold=True, 
             color=(0.2, 0.8, 1, 1),
-            size_hint=(1, 0.15)
+            size_hint=(1, 0.1)
         )
         self.root.add_widget(title)
         
-        self.name_inputs = []
-        inputs_box = BoxLayout(orientation='vertical', spacing=10, size_hint=(1, 0.65))
+        # Selector Layout for Player Count
+        select_box = BoxLayout(orientation='horizontal', size_hint=(1, 0.1), spacing=10)
+        select_label = Label(text="Select Number of Managers:", font_size='14sp', color=(1, 1, 1, 1))
         
-        for i in range(4):
-            inp = TextInput(
-                text=f"Manager {i+1}", 
-                multiline=False, 
-                font_size='16sp',
-                background_color=(0.15, 0.15, 0.2, 1),
-                foreground_color=(1, 1, 1, 1),
-                padding_y=[12, 12],
-                cursor_color=(0.2, 0.8, 1, 1)
-            )
-            self.name_inputs.append(inp)
-            inputs_box.add_widget(inp)
-            
-        self.root.add_widget(inputs_box)
+        self.spinner = Spinner(
+            text=str(self.num_players),
+            values=('2', '3', '4', '5'),
+            size_hint=(0.4, 1),
+            background_color=(0.2, 0.6, 0.9, 1)
+        )
+        self.spinner.bind(text=self.on_player_count_change)
+        
+        select_box.add_widget(select_label)
+        select_box.add_widget(self.spinner)
+        self.root.add_widget(select_box)
+
+        # Dynamic Inputs Box
+        self.inputs_box = BoxLayout(orientation='vertical', spacing=8, size_hint=(1, 0.65))
+        self.render_name_inputs()
+        self.root.add_widget(self.inputs_box)
         
         start_game_btn = Button(
             text="START DRAFT AUCTION ($400M)", 
@@ -140,20 +145,40 @@ class FootballAuctionLeagueApp(App):
         )
         self.root.add_widget(start_game_btn)
 
+    def on_player_count_change(self, spinner, text):
+        self.num_players = int(text)
+        self.render_name_inputs()
+
+    def render_name_inputs(self):
+        self.inputs_box.clear_widgets()
+        self.name_inputs = []
+        for i in range(self.num_players):
+            inp = TextInput(
+                text=f"Manager {i+1}", 
+                multiline=False, 
+                font_size='15sp',
+                background_color=(0.15, 0.15, 0.2, 1),
+                foreground_color=(1, 1, 1, 1),
+                padding_y=[10, 10],
+                cursor_color=(0.2, 0.8, 1, 1)
+            )
+            self.name_inputs.append(inp)
+            self.inputs_box.add_widget(inp)
+
     # ------------------------------------------
-    # SCREEN 2: Auction Phase ($400M Budget & Multiple Bids)
+    # SCREEN 2: Dynamic Auction Phase ($400M Budget)
     # ------------------------------------------
     def start_auction_game(self, instance):
         self.players = {
             i: {
                 "name": self.name_inputs[i].text.strip() or f"Manager {i+1}", 
-                "budget": 400,  # 💰 Updated Budget to $400M
+                "budget": 400, 
                 "squad": [], 
                 "pts": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0
-            } for i in range(4)
+            } for i in range(self.num_players)
         }
         
-        self.active_bidders = [0, 1, 2, 3]
+        self.active_bidders = list(range(self.num_players))
         self.current_turn_idx = 0
         self.used_player_ids = set()
         self.current_player = None
@@ -163,7 +188,6 @@ class FootballAuctionLeagueApp(App):
 
         self.root.clear_widgets()
         
-        # Info bar
         self.info_label = Label(
             text="Press 'Start Round' to begin!", 
             font_size='15sp', 
@@ -173,9 +197,8 @@ class FootballAuctionLeagueApp(App):
         )
         self.root.add_widget(self.info_label)
         
-        # Card display panel
         self.card_label = Label(
-            text="Build your 11-Player Squad!\nStarting Budget: $400M", 
+            text=f"Build your 11-Player Squad!\n{self.num_players} Managers | $400M Budget", 
             font_size='15sp', 
             halign='center', 
             valign='middle',
@@ -185,7 +208,6 @@ class FootballAuctionLeagueApp(App):
         self.card_label.bind(size=self._update_text_size)
         self.root.add_widget(self.card_label)
         
-        # Logs
         self.log_label = Label(
             text="", 
             font_size='13sp', 
@@ -203,12 +225,9 @@ class FootballAuctionLeagueApp(App):
         # Action Buttons Layout
         actions_layout = BoxLayout(orientation='vertical', size_hint=(1, 0.3), spacing=6)
         
-        # Grid of bidding buttons (+1M, +5M, +10M, +15M)
         bid_grid = GridLayout(cols=4, spacing=5, size_hint=(1, 0.5))
-        
         self.bid_btns = []
-        bid_amounts = [1, 5, 10, 15]
-        for amt in bid_amounts:
+        for amt in [1, 5, 10, 15]:
             btn = Button(
                 text=f"+${amt}M", 
                 font_size='13sp', 
@@ -222,7 +241,6 @@ class FootballAuctionLeagueApp(App):
             
         actions_layout.add_widget(bid_grid)
         
-        # Pass and Start Buttons
         sub_layout = BoxLayout(orientation='horizontal', spacing=8, size_hint=(1, 0.5))
         self.pass_btn = Button(
             text="Pass / Fold", 
@@ -368,7 +386,7 @@ class FootballAuctionLeagueApp(App):
         self.start_btn.disabled = False
 
     # ------------------------------------------
-    # SCREEN 3: League Simulation & Matches
+    # SCREEN 3: Dynamic League Simulation
     # ------------------------------------------
     def start_league_matches(self):
         self.root.clear_widgets()
@@ -383,7 +401,7 @@ class FootballAuctionLeagueApp(App):
         self.root.add_widget(self.info_label)
         
         self.card_label = Label(
-            text="Simulating League Season...", 
+            text=f"Simulating League for {self.num_players} Teams...", 
             font_size='15sp', 
             halign='center', 
             valign='middle', 
@@ -417,8 +435,9 @@ class FootballAuctionLeagueApp(App):
             avg_ovr = sum(pl['rating'] for pl in p['squad']) / max(len(p['squad']), 1)
             team_ratings[pid] = avg_ovr
 
-        for i in range(4):
-            for j in range(i + 1, 4):
+        # Round Robin simulation for N players
+        for i in range(self.num_players):
+            for j in range(i + 1, self.num_players):
                 p1, p2 = self.players[i], self.players[j]
                 
                 score1 = max(0, int((team_ratings[i] - 70) / 5 + random.randint(-1, 3)))
